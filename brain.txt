@@ -1,0 +1,10 @@
+hey:text:hey
+hey:text:yo
+hey:text:whats up
+lol:text:lol
+lol:text:lolol
+lol:text:loool
+lool:text:lol
+lool:text:lolol
+lool:text:loool
+

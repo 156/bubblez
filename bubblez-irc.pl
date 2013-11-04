@@ -13,7 +13,7 @@ use AI::MegaHAL;
 
 getopts('n:r:i:s:p:c:h');
 
-my @responses = ();
+my @responses = ("hey:text:test");
 
 my $VERSION = '0.1';
 my $NAME = 'Bubblez';
@@ -42,7 +42,7 @@ $channels = $opt_c;
 
 $nickname |= ($NAME . $$ );
 $realname |= $NAME . " " . $VERSION;
-$ircname |= $NAME . " " $VERSION;
+$ircname |= $NAME . " " . $VERSION;
 $server |= "irc.theinfinitynetwork.org";
 $port |= 6667;
 $channels |= "#infn";
@@ -111,19 +111,51 @@ sub on_public
   my $channel = $where->[0];
   my $ts      = scalar localtime;
   
-  if ($msg =~ /$nickname/) { $msg =~ s/$nickname //g; $msg =~ s/$nickname//g; }
-    
+  my $hadnick = 0;
+  
+  if ($msg =~ /$nickname/) { $msg =~ s/$nickname //g; $msg =~ s/$nickname//g; $hadnick = 1; }
+
+  if ($msg =~ /^\.loadresponses/) { @responses = (); open FD, "brain.txt"; while (<FD>) { chomp; push @responses, $_; } close FD; }
+  if ($msg =~ /^\.saveresponses/) { open FD, ">brain.txt"; foreach my $r (@responses) { print FD "$r\n"; } close (FD); }
+  
+  if (my ($msgstring) = $msg =~ /^\.addresponse (.*)/) { push @responses, $msgstring; return; }
+
   if ($msg =~ /time/) { $irc->yield(privmsg =>$channel, `date`); return; }
   if ($msg =~ /date/) { $irc->yield(privmsg =>$channel, `date`); return; }
   
   my @output = ();
   my $doresponse = 0;
+
+  # must be language
   
+  $megahal->learn($msg);
+  
+  AI::MegaHAL::megahal_cleanup();
+  
+  if ($hadnick)
+  {
   foreach my $response (@responses)
   {
-    my ($m, $v) = split(/:/, $response);
-        
-    if ($msg =~ /$m/) { push @output, $v; $doresponse=1; }
+   # my ($m, $f, $v) = split(/:/, $response);
+    if ($response =~ /(\S+)\:(\S+)\:(.*)/)
+    {
+      my $m=$1;
+      my $f=$2;
+      my $v=$3;
+      
+      if ($msg =~ /$m/) {
+        if ($f eq "text")
+        {
+          push @output, $v;
+          $doresponse=1;
+        }
+         if ($f eq "markov")
+        {
+          push @output, $megahal->do_reply($v);
+          $doresponse=1;
+        }
+      }
+    }
   }
   
   if ($doresponse)
@@ -132,10 +164,10 @@ sub on_public
     return;
   }
   
-  $megahal->learn($msg);
+  # everything else has failed
+  $irc->yield(privmsg => $channel, $megahal->do_reply($msg));
   
-  AI::MegaHAL::megahal_cleanup();
-  
+  }
 }
 
 $poe_kernel->run();
